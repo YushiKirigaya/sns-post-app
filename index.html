@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SNS投稿ツール</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f5;color:#333;min-height:100vh}
+.app{max-width:680px;margin:0 auto;padding:1rem}
+h1{font-size:18px;font-weight:600;margin-bottom:1.5rem;color:#111}
+.tabs{display:flex;gap:0;border-bottom:1px solid #e0e0e0;margin-bottom:1.5rem}
+.tab{padding:9px 16px;font-size:13px;cursor:pointer;border:none;background:none;color:#888;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.active{color:#111;border-bottom:2px solid #111;font-weight:500}
+.panel{display:none}.panel.active{display:block}
+label{font-size:13px;color:#666;display:block;margin-bottom:5px}
+textarea,input[type=text],input[type=password]{width:100%;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:14px;font-family:inherit;background:#fff;color:#333;resize:vertical}
+textarea:focus,input:focus{outline:none;border-color:#999}
+.btn{border:1px solid #ddd;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;background:#fff;color:#333;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:#f5f5f5}
+.btn.primary{background:#111;color:#fff;border-color:#111}
+.btn.primary:hover{background:#333}
+.btn.twitter{background:#000;color:#fff;border-color:#000}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.sm{padding:5px 10px;font-size:12px}
+.mb1{margin-bottom:1rem}.mb15{margin-bottom:1.5rem}
+.card{background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:1rem 1.25rem;margin-bottom:12px}
+.flex-end{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.preview-box{background:#f9f9f9;border-radius:8px;padding:12px;margin-bottom:10px;border:1px solid #e8e8e8}
+.preview-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.preview-platform{font-size:12px;font-weight:500;color:#666}
+.preview-text{font-size:14px;line-height:1.7;color:#333;white-space:pre-wrap;word-break:break-all;min-height:60px}
+.char-count{font-size:11px;margin-top:4px;color:#999}
+.result-card{border-radius:8px;padding:12px;margin-top:12px;font-size:13px;line-height:1.6}
+.result-ok{background:#e8f5e9;color:#2e7d32}
+.result-err{background:#ffebee;color:#c62828}
+.hint{font-size:12px;color:#999;margin-top:4px;line-height:1.6}
+.generating{text-align:center;padding:2rem;color:#888;font-size:14px}
+.section-title{font-size:15px;font-weight:500;color:#111;margin-bottom:1rem}
+.status-row{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot-ok{background:#4caf50}.dot-ng{background:#f44336}
+.schedule-row{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+select,input[type=datetime-local]{border:1px solid #ddd;border-radius:8px;padding:6px 10px;font-size:13px;background:#fff;color:#333}
+.stock-item{background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:1rem 1.25rem;margin-bottom:10px}
+.stock-meta{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;font-size:12px;color:#999}
+.stock-text{font-size:13px;line-height:1.6;color:#333;white-space:pre-wrap}
+.stock-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.badge{font-size:11px;padding:2px 8px;border-radius:999px}
+.badge-draft{background:#f5f5f5;color:#888}
+.badge-posted{background:#e8f5e9;color:#2e7d32}
+.empty{text-align:center;padding:3rem;color:#aaa;font-size:14px}
+.api-note{background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:10px 12px;font-size:12px;color:#795548;margin-top:8px;line-height:1.8}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>📱 SNS投稿ツール</h1>
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('post',this)">✏️ 投稿</button>
+    <button class="tab" onclick="switchTab('stock',this)">📦 ストック <span id="stock-badge" style="font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:999px;margin-left:2px">0</span></button>
+    <button class="tab" onclick="switchTab('settings',this)">⚙️ 設定</button>
+    <button class="tab" onclick="switchTab('tone',this)">🎨 口調</button>
+  </div>
+
+  <!-- 投稿タブ -->
+  <div id="tab-post" class="panel active">
+    <div class="mb1">
+      <label>iPhoneメモのテキストを貼り付け</label>
+      <textarea id="raw-input" rows="5" placeholder="歩きながら話した内容をそのまま貼ってください。AIが整形してTwitter投稿文にします。"></textarea>
+    </div>
+    <div class="flex-end mb1">
+      <button class="btn primary" id="gen-btn" onclick="generatePost()">✨ AI整形してプレビュー</button>
+    </div>
+    <div id="preview-area"></div>
+  </div>
+
+  <!-- ストックタブ -->
+  <div id="tab-stock" class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <p class="section-title" style="margin:0">投稿ストック</p>
+      <button class="btn sm" onclick="clearPosted()">🗑 投稿済みを削除</button>
+    </div>
+    <div id="stock-list"></div>
+  </div>
+
+  <!-- 設定タブ -->
+  <div id="tab-settings" class="panel">
+    <p class="section-title">Buffer API設定</p>
+    <div class="card mb1">
+      <div class="status-row">
+        <span class="dot" id="api-dot"></span>
+        <span id="api-status-text"></span>
+      </div>
+      <div class="mb1">
+        <label>Buffer APIキー</label>
+        <input type="password" id="buf-token" placeholder="Buffer Personal Access Token">
+      </div>
+      <div class="mb1">
+        <label>Twitter チャンネルID</label>
+        <input type="text" id="buf-channel" placeholder="例：6a1e42edc687a22dd44eb75b">
+      </div>
+      <div class="mb1">
+        <label>Anthropic APIキー（AI整形用）</label>
+        <input type="password" id="anthropic-key" placeholder="sk-ant-...">
+        <div class="hint">claude.aiのアカウントとは別です。console.anthropic.comで取得してください。</div>
+      </div>
+      <div class="api-note">⚠️ Buffer APIキーは30日で期限切れになります（無料プラン）。期限が切れたら設定タブから更新してください。</div>
+    </div>
+    <div class="flex-end">
+      <button class="btn primary" onclick="saveSettings()">💾 保存</button>
+    </div>
+    <div id="settings-saved" style="font-size:13px;color:#4caf50;text-align:right;margin-top:6px;display:none">保存しました ✓</div>
+  </div>
+
+  <!-- 口調タブ -->
+  <div id="tab-tone" class="panel">
+    <p class="section-title">口調・スタイル設定</p>
+    <div class="mb1">
+      <label>基本プロンプト（ここを変えるだけで口調が変わります）</label>
+      <textarea id="tone-prompt" rows="6">丁寧なです・ます調で書いてください。ただし堅くなりすぎず、読者に語りかけるような温かみのある文体にしてください。マレーシア在住の日本人として、現地での気づきや日本との比較を自然に織り交ぜてください。英会話講師としての視点も時々入れてください。</textarea>
+      <p class="hint">ChatGPTの会話履歴を分析したらここを更新してチューニングできます。</p>
+    </div>
+    <div class="mb1">
+      <label>ハッシュタグ</label>
+      <input type="text" id="hashtags" value="#マレーシア生活 #英会話 #海外移住 #オンライン英会話">
+    </div>
+    <div class="flex-end">
+      <button class="btn primary" onclick="saveTone()">💾 保存</button>
+    </div>
+    <div id="tone-saved" style="font-size:13px;color:#4caf50;text-align:right;margin-top:6px;display:none">保存しました ✓</div>
+  </div>
+</div>
+
+<script>
+let cfg = JSON.parse(localStorage.getItem('sns_cfg_v3') || 'null') || {
+  token: 'gxN0H6BCbo-40xuhIlVUP8D84CW9IEHkleCHwCWLHCN',
+  channelId: '6a1e42edc687a22dd44eb75b',
+  anthropicKey: ''
+};
+let tone = JSON.parse(localStorage.getItem('sns_tone_v3') || 'null') || {
+  prompt: '丁寧なです・ます調で書いてください。ただし堅くなりすぎず、読者に語りかけるような温かみのある文体にしてください。マレーシア在住の日本人として、現地での気づきや日本との比較を自然に織り交ぜてください。英会話講師としての視点も時々入れてください。',
+  hashtags: '#マレーシア生活 #英会話 #海外移住 #オンライン英会話'
+};
+let stock = JSON.parse(localStorage.getItem('sns_stock_v3') || '[]');
+let currentText = '';
+
+function switchTab(name, el) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+  if(name==='settings') loadSettings();
+  if(name==='tone') loadTone();
+  if(name==='stock') renderStock();
+}
+
+function loadSettings() {
+  document.getElementById('buf-token').value = cfg.token||'';
+  document.getElementById('buf-channel').value = cfg.channelId||'';
+  document.getElementById('anthropic-key').value = cfg.anthropicKey||'';
+  updateStatusDot();
+}
+
+function saveSettings() {
+  cfg.token = document.getElementById('buf-token').value.trim();
+  cfg.channelId = document.getElementById('buf-channel').value.trim();
+  cfg.anthropicKey = document.getElementById('anthropic-key').value.trim();
+  localStorage.setItem('sns_cfg_v3', JSON.stringify(cfg));
+  updateStatusDot();
+  document.getElementById('settings-saved').style.display='block';
+  setTimeout(()=>document.getElementById('settings-saved').style.display='none', 2000);
+}
+
+function updateStatusDot() {
+  const dot = document.getElementById('api-dot');
+  const txt = document.getElementById('api-status-text');
+  if(cfg.token && cfg.channelId) {
+    dot.className='dot dot-ok';
+    txt.textContent='Buffer設定済み — Twitter投稿可能';
+  } else {
+    dot.className='dot dot-ng';
+    txt.textContent='APIキー未設定';
+  }
+}
+
+function loadTone() {
+  document.getElementById('tone-prompt').value = tone.prompt||'';
+  document.getElementById('hashtags').value = tone.hashtags||'';
+}
+
+function saveTone() {
+  tone.prompt = document.getElementById('tone-prompt').value;
+  tone.hashtags = document.getElementById('hashtags').value;
+  localStorage.setItem('sns_tone_v3', JSON.stringify(tone));
+  document.getElementById('tone-saved').style.display='block';
+  setTimeout(()=>document.getElementById('tone-saved').style.display='none', 2000);
+}
+
+async function generatePost() {
+  const raw = document.getElementById('raw-input').value.trim();
+  if(!raw){alert('テキストを入力してください');return;}
+  if(!cfg.anthropicKey){alert('設定タブでAnthropicのAPIキーを入力してください');return;}
+  const btn = document.getElementById('gen-btn');
+  btn.disabled=true;
+  document.getElementById('preview-area').innerHTML='<div class="generating">✨ AIが整形しています...</div>';
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':cfg.anthropicKey,'anthropic-version':'2023-06-01'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:500,
+        messages:[{role:'user',content:`以下の生テキストをTwitter投稿文に整形してください。
+
+口調：${tone.prompt}
+ハッシュタグ：${tone.hashtags}
+
+生テキスト：${raw}
+
+条件：
+- 140文字以内（ハッシュタグ込み）
+- 改行は1〜2箇所まで
+- 投稿文のみ返してください（説明不要）`}]
+      })
+    });
+    const data = await res.json();
+    currentText = data.content.map(i=>i.text||'').join('').trim();
+    renderPreview(currentText);
+  } catch(e) {
+    document.getElementById('preview-area').innerHTML='<div class="result-card result-err">エラーが発生しました。APIキーを確認してください。</div>';
+  }
+  btn.disabled=false;
+}
+
+function renderPreview(text) {
+  const count = text.length;
+  const over = count > 140;
+  document.getElementById('preview-area').innerHTML = `
+    <div class="preview-box">
+      <div class="preview-header">
+        <span class="preview-platform">🐦 Twitter投稿プレビュー</span>
+        <button class="btn sm" onclick="copyText()">📋 コピー</button>
+      </div>
+      <div class="preview-text" id="preview-text-edit" contenteditable="true" oninput="currentText=this.textContent;updateCharCount()">${text}</div>
+      <div class="char-count" id="char-count" style="color:${over?'#f44336':'#999'}">${count}/140文字 ${over?'⚠️ 超過':'✓'}</div>
+    </div>
+    <div class="schedule-row">
+      <label style="margin:0;white-space:nowrap;font-size:13px">投稿タイミング：</label>
+      <select id="schedule-type" onchange="toggleSchedule()">
+        <option value="now">今すぐ投稿</option>
+        <option value="custom">日時指定</option>
+      </select>
+      <input type="datetime-local" id="custom-datetime" style="display:none">
+    </div>
+    <div class="flex-end" style="margin-top:12px">
+      <button class="btn sm" onclick="saveStock()">📦 ストック保存</button>
+      <button class="btn twitter" id="post-btn" onclick="postToBuffer()">𝕏 Bufferで投稿</button>
+    </div>
+    <div id="post-result"></div>
+  `;
+}
+
+function copyText() {
+  navigator.clipboard.writeText(currentText).then(()=>{
+    event.currentTarget.textContent='✓ コピー済み';
+    setTimeout(()=>event.currentTarget.textContent='📋 コピー',1500);
+  });
+}
+
+function updateCharCount() {
+  const count = currentText.length;
+  const el = document.getElementById('char-count');
+  if(el) { el.textContent=`${count}/140文字 ${count>140?'⚠️ 超過':'✓'}`; el.style.color=count>140?'#f44336':'#999'; }
+}
+
+function toggleSchedule() {
+  const type = document.getElementById('schedule-type').value;
+  document.getElementById('custom-datetime').style.display = type==='custom'?'block':'none';
+}
+
+async function postToBuffer() {
+  if(!cfg.token||!cfg.channelId){alert('設定タブでBufferのAPIキーとチャンネルIDを確認してください');return;}
+  const text = currentText;
+  if(!text){alert('投稿文がありません');return;}
+  const btn = document.getElementById('post-btn');
+  btn.disabled=true; btn.textContent='送信中...';
+
+  const scheduleType = document.getElementById('schedule-type').value;
+  let scheduledAt = null;
+  if(scheduleType==='custom'){
+    const dt = document.getElementById('custom-datetime').value;
+    if(dt) scheduledAt = new Date(dt).toISOString();
+  }
+
+  try {
+    const dueAt = scheduledAt || new Date().toISOString();
+    const mutation = `mutation CreateUpdate($input: CreateUpdateInput!) {
+      createUpdate(input: $input) {
+        ... on UpdateCreated { update { id text status } }
+        ... on Error { message }
+      }
+    }`;
+    const res = await fetch('https://api.buffer.com/graphql',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.token},
+      body:JSON.stringify({query:mutation,variables:{input:{channelId:cfg.channelId,content:{text},dueAt}}})
+    });
+    const data = await res.json();
+    const result = data?.data?.createUpdate;
+    if(result?.update){
+      document.getElementById('post-result').innerHTML='<div class="result-card result-ok">✅ Bufferに送信しました！<a href="https://publish.buffer.com" target="_blank" style="color:inherit">Bufferのキュー</a>で確認してください。</div>';
+      saveStock(true);
+    } else {
+      const msg = result?.message||'送信失敗';
+      document.getElementById('post-result').innerHTML=`<div class="result-card result-err">❌ ${msg}<br>上の「📋 コピー」でテキストをコピーして<a href="https://publish.buffer.com" target="_blank" style="color:#c62828">Buffer</a>に手動で貼り付けてください。</div>`;
+    }
+  } catch(e){
+    document.getElementById('post-result').innerHTML=`<div class="result-card result-err">❌ 通信エラー。<a href="https://publish.buffer.com" target="_blank" style="color:#c62828">Buffer</a>に手動で貼り付けてください。</div>`;
+  }
+  btn.disabled=false; btn.textContent='𝕏 Bufferで投稿';
+}
+
+function saveStock(posted=false) {
+  const item={id:Date.now(),date:new Date().toLocaleDateString('ja-JP'),text:currentText,status:posted?'posted':'draft'};
+  stock.unshift(item);
+  localStorage.setItem('sns_stock_v3',JSON.stringify(stock));
+  document.getElementById('stock-badge').textContent=stock.length;
+  if(!posted&&event?.currentTarget){
+    const btn=event.currentTarget;
+    btn.textContent='✓ 保存済み';
+    setTimeout(()=>btn.textContent='📦 ストック保存',1500);
+  }
+}
+
+function renderStock() {
+  const el=document.getElementById('stock-list');
+  document.getElementById('stock-badge').textContent=stock.length;
+  if(!stock.length){el.innerHTML='<div class="empty">📭 まだストックがありません</div>';return;}
+  el.innerHTML=stock.map(item=>`
+    <div class="stock-item">
+      <div class="stock-meta">
+        <span>${item.date}</span>
+        <span class="badge badge-${item.status}">${item.status==='posted'?'✓ 投稿済み':'📝 下書き'}</span>
+      </div>
+      <div class="stock-text">${item.text}</div>
+      <div class="stock-actions">
+        <button class="btn sm" onclick="navigator.clipboard.writeText(stock.find(i=>i.id===${item.id}).text)">📋 コピー</button>
+        <button class="btn sm" onclick="markPosted(${item.id})">✓ 投稿済みにする</button>
+        <button class="btn sm" style="color:#f44336" onclick="deleteItem(${item.id})">🗑</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function markPosted(id){const i=stock.find(s=>s.id===id);if(i){i.status='posted';localStorage.setItem('sns_stock_v3',JSON.stringify(stock));renderStock();}}
+function deleteItem(id){stock=stock.filter(s=>s.id!==id);localStorage.setItem('sns_stock_v3',JSON.stringify(stock));renderStock();}
+function clearPosted(){stock=stock.filter(s=>s.status!=='posted');localStorage.setItem('sns_stock_v3',JSON.stringify(stock));renderStock();}
+
+updateStatusDot();
+document.getElementById('stock-badge').textContent=stock.length;
+</script>
+</body>
+</html>
