@@ -9,31 +9,29 @@ export default async function handler(req, res) {
   if (!token || !channelId) { res.status(400).json({ error: 'Buffer APIキーまたはチャンネルIDがありません' }); return; }
 
   try {
-    const dueAt = scheduledAt || new Date().toISOString();
-    const mutation = `mutation CreateUpdate($input: CreateUpdateInput!) {
-      createUpdate(input: $input) {
-        ... on UpdateCreated { update { id text status } }
-        ... on Error { message }
-      }
-    }`;
-    const response = await fetch('https://api.buffer.com/graphql', {
+    // Buffer REST API v1を使用
+    const params = new URLSearchParams();
+    params.append('text', text);
+    params.append('profile_ids[]', channelId);
+    if (scheduledAt) {
+      params.append('scheduled_at', scheduledAt);
+    }
+
+    const response = await fetch('https://api.bufferapp.com/1/updates/create.json', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': 'Bearer ' + token
       },
-      body: JSON.stringify({
-        query: mutation,
-        variables: { input: { channelId, content: { text }, dueAt } }
-      })
+      body: params.toString()
     });
+    
     const data = await response.json();
-    const result = data?.data?.createUpdate;
-    if (result?.update) {
-      res.status(200).json({ success: true, id: result.update.id });
+    
+    if (data.success || data.updates) {
+      res.status(200).json({ success: true });
     } else {
-      const msg = result?.message || JSON.stringify(data);
-      res.status(400).json({ error: msg });
+      res.status(400).json({ error: data.message || JSON.stringify(data) });
     }
   } catch (e) {
     res.status(500).json({ error: e.message });
