@@ -294,29 +294,21 @@ async function postToBuffer() {
 
   try {
     const dueAt = scheduledAt || new Date().toISOString();
-    const mutation = `mutation CreateUpdate($input: CreateUpdateInput!) {
-      createUpdate(input: $input) {
-        ... on UpdateCreated { update { id text status } }
-        ... on Error { message }
-      }
-    }`;
-    const res = await fetch('https://api.buffer.com/graphql',{
+    const res = await fetch('/api/buffer',{
       method:'POST',
-      headers:{
-        'Content-Type':'application/json','Authorization':'Bearer '+cfg.token},
-      body:JSON.stringify({query:mutation,variables:{input:{channelId:cfg.channelId,content:{text},dueAt}}})
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text, token:cfg.token, channelId:cfg.channelId, scheduledAt:dueAt})
     });
     const data = await res.json();
-    const result = data?.data?.createUpdate;
-    if(result?.update){
+    if(data.success){
       document.getElementById('post-result').innerHTML='<div class="result-card result-ok">✅ Bufferに送信しました！<a href="https://publish.buffer.com" target="_blank" style="color:#2e7d32">Bufferのキュー</a>で確認してください。</div>';
       saveStock(true);
     } else {
-      const msg = result?.message||JSON.stringify(data);
+      const msg = data.error||'送信失敗';
       document.getElementById('post-result').innerHTML=`<div class="result-card result-err">❌ ${msg}<br>「📋 コピー」でテキストをコピーして<a href="https://publish.buffer.com" target="_blank" style="color:#c62828">Buffer</a>に手動で貼り付けてください。</div>`;
     }
   } catch(e){
-    document.getElementById('post-result').innerHTML=`<div class="result-card result-err">❌ 通信エラー。<a href="https://publish.buffer.com" target="_blank" style="color:#c62828">Buffer</a>に手動で貼り付けてください。</div>`;
+    document.getElementById('post-result').innerHTML=`<div class="result-card result-err">❌ 通信エラー：${e.message}</div>`;
   }
   btn.disabled=false;btn.textContent='𝕏 Bufferで投稿';
 }
